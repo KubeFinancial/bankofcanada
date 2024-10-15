@@ -12,7 +12,7 @@ func main() {
 	log.SetFlags(log.Ldate | log.Lmicroseconds)
 
 	// Fetch the list of available series
-	apiResponse, err := valet.Api("/observations/group/FX_RATES_DAILY/json?recent=2")
+	apiResponse, err := valet.Api("/observations/group/FX_RATES_DAILY/json?recent=1")
 	if err != nil {
 		log.Fatal(err)
 	}
