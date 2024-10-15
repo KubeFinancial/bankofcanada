@@ -12,61 +12,61 @@ import (
 
 // Client is a custom HTTP client that logs request and response details
 type Client struct {
-	log *log.Logger
+	debug *log.Logger
 }
 
 // RoundTrip implements the http.RoundTripper interface
 func (c Client) RoundTrip(r *http.Request) (*http.Response, error) {
-	c.log.Printf("%s %s %s", r.Method, r.URL, r.Proto)
-	resp, err := http.DefaultTransport.RoundTrip(r)
-	if resp != nil {
-		c.log.Println(resp.Status)
+	isDebug := os.Getenv("LOGLEVEL") == "" || os.Getenv("LOGLEVEL") == "DEBUG"
+	if isDebug {
+		c.debug.Println(r.Method, r.URL, r.Proto)
 	}
-	return resp, err
+	response, err := http.DefaultTransport.RoundTrip(r)
+	if response != nil && isDebug {
+		c.debug.Println(response.Status)
+	}
+	return response, err
 }
 
 // Api makes a GET request to the Bank of Canada Valet API and returns the unmarshalled JSON response
-func Api(endpoint string) (interface{}, error) {
+func Api(endpoint string) (ApiResponse, error) {
 	transport := Client{
-		log: log.New(os.Stdout, "", log.Ldate|log.Lmicroseconds),
+		debug: log.New(os.Stdout, "DEBUG\t", log.Ldate|log.Lmicroseconds),
 	}
 	client := &http.Client{
 		Timeout:   10 * time.Second,
 		Transport: &transport,
 	}
 
-	url := fmt.Sprintf("https://www.bankofcanada.ca/valet%s", endpoint)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	url := fmt.Sprintf("https://www.bankofcanada.ca/valet%s/json", endpoint)
+	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return ApiResponse{}, fmt.Errorf("error creating request: %w", err)
 	}
 
-	req.Header.Set("User-Agent", "bankofcanada_go/0.0.1")
-
-	resp, err := client.Do(req)
+	response, err := client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("error sending request: %w", err)
+		return ApiResponse{}, fmt.Errorf("error sending request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer response.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, ioErr := io.ReadAll(resp.Body)
-		if ioErr != nil {
-			return nil, fmt.Errorf("error reading response: %w", ioErr)
-		}
-		var errorResponse struct {
-			Message string `json:"message"`
-		}
-		if err = json.Unmarshal(body, &errorResponse); err != nil {
-			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-		}
-		return nil, fmt.Errorf("API error: %s", errorResponse.Message)
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return ApiResponse{}, fmt.Errorf("error reading response: %w", err)
 	}
 
-	var result interface{}
-	if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("error decoding response: %w", err)
+	if response.StatusCode != http.StatusOK {
+		var errResp ApiErrorResponse
+		if err = json.Unmarshal(body, &errResp); err != nil {
+			return ApiResponse{}, fmt.Errorf("error unmarshalling error response (status %d): %s", response.StatusCode, string(body))
+		}
+		return ApiResponse{}, fmt.Errorf("API error: %s", errResp.Message)
 	}
 
-	return result, nil
+	var apiResponse ApiResponse
+	if err = json.Unmarshal(body, &apiResponse); err != nil {
+		return ApiResponse{}, fmt.Errorf("error unmarshalling JSON: %w", err)
+	}
+
+	return apiResponse, nil
 }
