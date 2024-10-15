@@ -10,12 +10,12 @@ import (
 	"time"
 )
 
-// Client is a custom HTTP client that logs request and response details
+// Client is a custom HTTP client that logs request and response details.
 type Client struct {
 	debug *log.Logger
 }
 
-// RoundTrip implements the http.RoundTripper interface
+// RoundTrip implements the http.RoundTripper interface.
 func (c Client) RoundTrip(r *http.Request) (*http.Response, error) {
 	isDebug := os.Getenv("LOGLEVEL") == "" || os.Getenv("LOGLEVEL") == "DEBUG"
 	if isDebug {
@@ -28,7 +28,7 @@ func (c Client) RoundTrip(r *http.Request) (*http.Response, error) {
 	return response, err
 }
 
-// Api makes a GET request to the Bank of Canada Valet API and returns the unmarshalled JSON response
+// Api makes a GET request to the Bank of Canada Valet API and returns the unmarshalled JSON response.
 func Api(endpoint string) (ApiResponse, error) {
 	transport := Client{
 		debug: log.New(os.Stdout, "DEBUG\t", log.Ldate|log.Lmicroseconds),
@@ -38,7 +38,7 @@ func Api(endpoint string) (ApiResponse, error) {
 		Transport: &transport,
 	}
 
-	url := fmt.Sprintf("https://www.bankofcanada.ca/valet%s/json", endpoint)
+	url := fmt.Sprintf("https://www.bankofcanada.ca/valet%s", endpoint)
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return ApiResponse{}, fmt.Errorf("error creating request: %w", err)
@@ -69,4 +69,39 @@ func Api(endpoint string) (ApiResponse, error) {
 	}
 
 	return apiResponse, nil
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for custom unmarshalling of Observation.
+func (o *Observation) UnmarshalJSON(data []byte) error {
+	raw := make(map[string]json.RawMessage)
+
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if val, ok := raw["d"]; ok {
+		if err := json.Unmarshal(val, &o.Date); err != nil {
+			return err
+		}
+	}
+
+	if val, ok := raw["q"]; ok {
+		if err := json.Unmarshal(val, &o.Quarter); err != nil {
+			return err
+		}
+	}
+
+	o.Series = make(map[string]SeriesObservation)
+	for key, value := range raw {
+		if key == "d" || key == "q" {
+			continue
+		}
+		var fxRate SeriesObservation
+		if err := json.Unmarshal(value, &fxRate); err != nil {
+			return err
+		}
+		o.Series[key] = fxRate
+	}
+
+	return nil
 }

@@ -12,18 +12,15 @@ func main() {
 	log.SetFlags(log.Ldate | log.Lmicroseconds)
 
 	// Fetch the list of available series
-	apiResponse, err := valet.Api("/observations/FXUSDCAD,FXEURCAD")
+	apiResponse, err := valet.Api("/observations/group/FX_RATES_DAILY/json?recent=2")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Print the list of groups
-	log.Println(apiResponse.GroupDetail.Label)
-	for name, item := range apiResponse.SeriesDetail {
-		log.Printf("%s: %s\n", name, item)
-	}
-
+	// Print the unmarshalled data
 	for _, observation := range apiResponse.Observations {
-		fmt.Println(observation)
+		for pair, rate := range observation.Series {
+			fmt.Println(observation.Date, pair, rate.Value)
+		}
 	}
 }

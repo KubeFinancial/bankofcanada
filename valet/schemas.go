@@ -1,13 +1,15 @@
 package valet
 
+// ApiErrorResponse represents an error response from the Bank of Canada Valet API.
 type ApiErrorResponse struct {
 	Message string `json:"message"`
 	Docs    string `json:"docs"`
 }
 
+// Detail represents detailed information about a series or group.
 type Detail struct {
-	Name        string `json:"name,omitempty"`
 	Label       string `json:"label"`
+	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 	Link        string `json:"link,omitempty"`
 	Dimension   struct {
@@ -16,6 +18,19 @@ type Detail struct {
 	} `json:"dimension,omitempty"`
 }
 
+// SeriesObservation represents a single observation for a series.
+type SeriesObservation struct {
+	Value string `json:"v"`
+}
+
+// Observation represents a collection of series observations for a specific date or quarter.
+type Observation struct {
+	Date    string                       `json:"d,omitempty"`
+	Quarter string                       `json:"q,omitempty"`
+	Series  map[string]SeriesObservation `json:"-"`
+}
+
+// ApiResponse represents the general structure of a response from the Bank of Canada Valet API.
 type ApiResponse struct {
 	Terms struct {
 		URL string `json:"url"`
@@ -29,5 +44,5 @@ type ApiResponse struct {
 	} `json:"groupDetails,omitempty"`
 	Series       map[string]Detail `json:"series,omitempty"`
 	Groups       map[string]Detail `json:"groups,omitempty"`
-	Observations []map[string]any  `json:"observations,omitempty"`
+	Observations []Observation     `json:"observations,omitempty"`
 }
