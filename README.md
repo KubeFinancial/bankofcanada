@@ -16,7 +16,7 @@ This is an **unofficial Go module** for interacting with the [Bank of Canada Val
 Install the module by running:
 
 ```bash
-go get github.com/KubeFinancial/bankofcanada-go
+go get github.com/KubeFinancial/bankofcanada
 ```
 
 ## Usage
@@ -28,59 +28,53 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/KubeFinancial/bankofcanada-go/valet"
+	"github.com/KubeFinancial/bankofcanada/valet"
 )
 
 func main() {
-	log.SetPrefix("INFO\t")
-	log.SetFlags(log.Ldate | log.Lmicroseconds)
-
-	// Fetch the list of available series
-	apiResponse, err := valet.Api("/observations/group/FX_RATES_DAILY/json?recent=1")
+	response, err := valet.GroupObservations("FX_RATES_DAILY")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Print the unmarshalled data
-	for _, observation := range apiResponse.Observations {
-		for pair, rate := range observation.Series {
-			fmt.Println(observation.Date, pair, rate.Value)
-		}
+	for _, item := range response {
+		fmt.Println(item)
 	}
 }
+
 ```
 
 ## Example Output
 The above code will return the most recent FX_RATES_DAILY data from the Bank of Canada Valet API.
 ```shell
-DEBUG   2024/10/15 02:31:19.375883 GET https://www.bankofcanada.ca/valet/observations/group/FX_RATES_DAILY/json?recent=1 HTTP/1.1
-DEBUG   2024/10/15 02:31:19.547594 200 OK
-2019-12-31 FXMYRCAD 0.3175
-2019-12-31 FXTHBCAD 0.04362
-2019-12-31 FXVNDCAD 0.000056
-2024-10-11 FXINRCAD 0.01636
-2024-10-11 FXHKDCAD 0.1771
-2024-10-11 FXSGDCAD 1.0546
-2024-10-11 FXEURCAD 1.5056
-2024-10-11 FXSEKCAD 0.1327
-2024-10-11 FXMXNCAD 0.07099
-2024-10-11 FXNOKCAD 0.1286
-2024-10-11 FXPENCAD 0.3680
-2024-10-11 FXRUBCAD 0.01436
-2024-10-11 FXSARCAD 0.3665
-2024-10-11 FXKRWCAD 0.001019
-2024-10-11 FXIDRCAD 0.000088
-2024-10-11 FXZARCAD 0.07903
-2024-10-11 FXCHFCAD 1.6053
-2024-10-11 FXBRLCAD 0.2447
-2024-10-11 FXJPYCAD 0.009230
-2024-10-11 FXUSDCAD 1.3761
-2024-10-11 FXCNYCAD 0.1947
-2024-10-11 FXTRYCAD 0.04010
-2024-10-11 FXAUDCAD 0.9288
-2024-10-11 FXNZDCAD 0.8403
-2024-10-11 FXTWDCAD 0.04274
-2024-10-11 FXGBPCAD 1.7988
+{"severity":"DEBUG","timestamp":"2024-10-16T03:57:28.032-0400","message":"Request: GET https://www.bankofcanada.ca/valet/observations/group/FX_RATES_DAILY/json?recent=1"}
+{"severity":"DEBUG","timestamp":"2024-10-16T03:57:28.299-0400","message":"Response: 200 OK, Filename: FX_RATES_DAILY.json, Generated: 2024-10-16 06:01:00 UTC"}
+{2019-12-31  FXVNDCAD 0.000056}
+{2019-12-31  FXMYRCAD 0.3175}
+{2019-12-31  FXTHBCAD 0.04362}
+{2024-10-15  FXGBPCAD 1.8055}
+{2024-10-15  FXNZDCAD 0.8403}
+{2024-10-15  FXAUDCAD 0.9262}
+{2024-10-15  FXIDRCAD 0.000089}
+{2024-10-15  FXTWDCAD 0.04287}
+{2024-10-15  FXTRYCAD 0.04030}
+{2024-10-15  FXPENCAD 0.3666}
+{2024-10-15  FXSEKCAD 0.1329}
+{2024-10-15  FXUSDCAD 1.3805}
+{2024-10-15  FXSARCAD 0.3677}
+{2024-10-15  FXEURCAD 1.5044}
+{2024-10-15  FXNOKCAD 0.1276}
+{2024-10-15  FXSGDCAD 1.0545}
+{2024-10-15  FXKRWCAD 0.001013}
+{2024-10-15  FXCHFCAD 1.6010}
+{2024-10-15  FXZARCAD 0.07830}
+{2024-10-15  FXHKDCAD 0.1777}
+{2024-10-15  FXINRCAD 0.01642}
+{2024-10-15  FXMXNCAD 0.07033}
+{2024-10-15  FXBRLCAD 0.2446}
+{2024-10-15  FXCNYCAD 0.1939}
+{2024-10-15  FXJPYCAD 0.009250}
+{2024-10-15  FXRUBCAD 0.01428}
 ```
 
 ## Additional Endpoints
