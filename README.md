@@ -16,7 +16,7 @@ This is an **unofficial Go module** for interacting with the [Bank of Canada Val
 Install the module by running:
 
 ```bash
-go get github.com/KubeFinancial/bankofcanada
+go get -u github.com/KubeFinancial/bankofcanada
 ```
 
 ## Usage
