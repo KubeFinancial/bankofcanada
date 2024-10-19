@@ -8,12 +8,17 @@ import (
 )
 
 func main() {
-	response, err := valet.GroupObservations("FX_RATES_DAILY")
+	series, err := valet.AwesomeSeries("FXUSDCAD")
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println(series)
 
-	for _, item := range response {
-		fmt.Println(item)
+	groupObservations, err := valet.GroupObservations("FX_RATES_DAILY")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, seriesObservation := range groupObservations {
+		fmt.Println(seriesObservation)
 	}
 }
