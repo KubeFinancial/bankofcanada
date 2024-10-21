@@ -28,34 +28,42 @@ func ListGroups() (map[string]Detail, error) {
 	return resp.Groups, nil
 }
 
-// SeriesInfo fetches the details of a specific series.
-func SeriesInfo(seriesName string) (Detail, error) {
+// Series fetches the details of a specific series.
+func Series(seriesName string) (Detail, error) {
 	if seriesName == "" {
 		return Detail{}, fmt.Errorf("series name is required")
 	}
+
 	endpointURL := fmt.Sprintf("%s/observations/%s/json?recent=1", baseURL, seriesName)
 	resp, err := API(endpointURL)
 	if err != nil {
 		return Detail{}, fmt.Errorf("fetching series list: %w", err)
 	}
-	var result Detail
-	for _, series := range resp.SeriesDetail {
-		result = series
-	}
-	return result, nil
+
+	return resp.SeriesDetail[seriesName], nil
 }
 
-// GroupInfo fetches the details of a specific group.
-func GroupInfo(groupName string) (GroupDetails, error) {
+// Group fetches the details of a specific group.
+func Group(groupName string) (GroupDetails, error) {
 	if groupName == "" {
 		return GroupDetails{}, fmt.Errorf("group name is required")
 	}
-	endpointURL := fmt.Sprintf("%s/groups/%s/json", baseURL, groupName)
+
+	endpointURL := fmt.Sprintf("%s/observations/group/%s/json?recent=1", baseURL, groupName)
 	resp, err := API(endpointURL)
 	if err != nil {
-		return GroupDetails{}, fmt.Errorf("fetching group info for %s: %w", groupName, err)
+		return GroupDetails{}, fmt.Errorf("fetching group details: %w", err)
 	}
-	return resp.GroupDetails, nil
+
+	groupDetails := GroupDetails{
+		Detail:      resp.GroupDetail,
+		GroupSeries: resp.SeriesDetail,
+	}
+
+	// Set the Name field explicitly
+	groupDetails.Detail.Name = groupName
+
+	return groupDetails, nil
 }
 
 // SeriesObservations fetches observations for series.
