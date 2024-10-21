@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	series, err := valet.AwesomeSeries("FXUSDCAD")
+	series, err := valet.SeriesInfo("FXUSDCAD")
 	if err != nil {
 		log.Fatal(err)
 	}
