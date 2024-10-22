@@ -2,6 +2,7 @@ package valet
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 // SeriesObservation represents a single observation for a series.
@@ -81,20 +82,22 @@ type ObservationOptions struct {
 // UnmarshalJSON Custom unmarshal function to populate the Name field in Detail
 func (r *APIResponse) UnmarshalJSON(data []byte) error {
 	type Alias APIResponse
+
 	aux := struct{ *Alias }{Alias: (*Alias)(r)}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal APIResponse: %w", err)
 	}
 
 	// Populate Name for all Detail types
-	populateNames := func(m map[string]Detail) {
-		if m == nil {
+	populateNames := func(details map[string]Detail) {
+		if details == nil {
 			return
 		}
-		for key, detail := range m {
+
+		for key, detail := range details {
 			detail.Name = key
-			m[key] = detail
+			details[key] = detail
 		}
 	}
 
@@ -106,12 +109,12 @@ func (r *APIResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface for custom unmarshalling of Observation.
+// UnmarshalJSON implements the json.Unmarshal interface for custom unmarshalling of Observation.
 func (o *Observation) UnmarshalJSON(data []byte) error {
 	raw := make(map[string]json.RawMessage)
 
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal Observation: %w", err)
 	}
 
 	// Helper function to unmarshal values
@@ -119,6 +122,7 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 		if val, ok := raw[field]; ok {
 			return json.Unmarshal(val, target)
 		}
+
 		return nil
 	}
 
@@ -126,6 +130,7 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 	if err := unmarshalField("d", &o.Date); err != nil {
 		return err
 	}
+
 	if err := unmarshalField("q", &o.Quarter); err != nil {
 		return err
 	}
@@ -141,8 +146,9 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 
 		var seriesObservation SeriesObservation
 		if err := json.Unmarshal(value, &seriesObservation); err != nil {
-			return err
+			return fmt.Errorf("failed to unmarshal series observation: %w", err)
 		}
+
 		seriesObservation.Name = key
 		seriesObservation.Date = o.Date
 		seriesObservation.Quarter = o.Quarter

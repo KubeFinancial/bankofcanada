@@ -1,6 +1,7 @@
 package valet
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,20 +12,24 @@ import (
 	"time"
 )
 
+const (
+	defaultTimeout = 10 * time.Second
+)
+
 // Client is a custom HTTP client that logs request and response details.
 type Client struct {
 	logger *log.Logger
 }
 
 // RoundTrip implements the http.RoundTripper interface.
-func (c Client) RoundTrip(r *http.Request) (*http.Response, error) {
-	// log the request
+func (c *Client) RoundTrip(r *http.Request) (*http.Response, error) {
 	c.logger.Printf("Request: %s %s", r.Method, r.URL)
 
-	// make the request
 	response, err := http.DefaultTransport.RoundTrip(r)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: %w", err)
+	}
 
-	// log the response
 	if response != nil {
 		if response.StatusCode == http.StatusOK {
 			c.logger.Printf(
@@ -41,34 +46,44 @@ func (c Client) RoundTrip(r *http.Request) (*http.Response, error) {
 		}
 	}
 
-	return response, err
+	return response, nil
 }
 
 // API makes a GET request to the Bank of Canada Valet API and returns the unmarshalled JSON response.
-func API(URL string) (APIResponse, error) {
+func API(url string) (APIResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
 	client := &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: &Client{logger: log.New(os.Stderr, "", log.Ldate|log.Lmicroseconds)},
+		Transport:     &Client{logger: log.New(os.Stderr, "", log.Ldate|log.Lmicroseconds)},
+		CheckRedirect: nil,
+		Jar:           nil,
+		Timeout:       defaultTimeout,
 	}
 
-	response, err := client.Get(URL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return APIResponse{}, err
+		return APIResponse{}, fmt.Errorf("create request: %w", err)
+	}
+
+	response, err := client.Do(req)
+	if err != nil {
+		return APIResponse{}, fmt.Errorf("do request: %w", err)
 	}
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return APIResponse{}, err
+		return APIResponse{}, fmt.Errorf("read response body: %w", err)
 	}
 
 	var apiResponse APIResponse
 	if err = json.Unmarshal(body, &apiResponse); err != nil {
-		return APIResponse{}, err
+		return APIResponse{}, fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
 	if response.StatusCode != http.StatusOK {
-		return APIResponse{}, fmt.Errorf(apiResponse.Message)
+		return APIResponse{}, fmt.Errorf("API error: %s", apiResponse.Message)
 	}
 
 	return apiResponse, nil

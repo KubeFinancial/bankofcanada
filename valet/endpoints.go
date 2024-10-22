@@ -1,43 +1,50 @@
 package valet
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 )
 
-const baseURL = "https://www.bankofcanada.ca/valet"
+const (
+	baseURL = "https://www.bankofcanada.ca/valet"
+)
 
 // ListSeries fetches the list of all series.
 func ListSeries() (map[string]Detail, error) {
-	endpointURL := fmt.Sprintf("%s/lists/series/json", baseURL)
+	endpointURL := baseURL + "/lists/series/json"
+
 	resp, err := API(endpointURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetching series list: %w", err)
 	}
+
 	return resp.Series, nil
 }
 
 // ListGroups fetches the list of all groups.
 func ListGroups() (map[string]Detail, error) {
-	endpointURL := fmt.Sprintf("%s/lists/groups/json", baseURL)
+	endpointURL := baseURL + "/lists/groups/json"
+
 	resp, err := API(endpointURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetching groups list: %w", err)
 	}
+
 	return resp.Groups, nil
 }
 
 // Series fetches the details of a specific series.
 func Series(seriesName string) (Detail, error) {
 	if seriesName == "" {
-		return Detail{}, fmt.Errorf("series name is required")
+		return Detail{}, errors.New("series name is required")
 	}
 
-	endpointURL := fmt.Sprintf("%s/observations/%s/json?recent=1", baseURL, seriesName)
-	resp, err := API(endpointURL)
+	resp, err := fetchObservations(seriesName, false, nil)
 	if err != nil {
-		return Detail{}, fmt.Errorf("fetching series list: %w", err)
+		return Detail{}, fmt.Errorf("fetching series details: %w", err)
 	}
 
 	return resp.SeriesDetail[seriesName], nil
@@ -46,11 +53,10 @@ func Series(seriesName string) (Detail, error) {
 // Group fetches the details of a specific group.
 func Group(groupName string) (GroupDetails, error) {
 	if groupName == "" {
-		return GroupDetails{}, fmt.Errorf("group name is required")
+		return GroupDetails{}, errors.New("group name is required")
 	}
 
-	endpointURL := fmt.Sprintf("%s/observations/group/%s/json?recent=1", baseURL, groupName)
-	resp, err := API(endpointURL)
+	resp, err := fetchObservations(groupName, true, nil)
 	if err != nil {
 		return GroupDetails{}, fmt.Errorf("fetching group details: %w", err)
 	}
@@ -59,8 +65,6 @@ func Group(groupName string) (GroupDetails, error) {
 		Detail:      resp.GroupDetail,
 		GroupSeries: resp.SeriesDetail,
 	}
-
-	// Set the Name field explicitly
 	groupDetails.Detail.Name = groupName
 
 	return groupDetails, nil
@@ -72,14 +76,15 @@ func SeriesObservations(
 	options ...*ObservationOptions,
 ) ([]SeriesObservation, error) {
 	if seriesNames == "" {
-		return nil, fmt.Errorf("atleast one series name is required")
+		return nil, errors.New("at least one series name is required")
 	}
-	endpointURL := fmt.Sprintf("%s/observations/%s/json", baseURL, seriesNames)
-	var opts *ObservationOptions
-	if len(options) > 0 {
-		opts = options[0]
+
+	resp, err := fetchObservations(seriesNames, false, options...)
+	if err != nil {
+		return nil, err
 	}
-	return fetchObservations(endpointURL, opts)
+
+	return parseObservations(resp.Observations), nil
 }
 
 // GroupObservations fetches observations for a group.
@@ -88,77 +93,107 @@ func GroupObservations(
 	options ...*ObservationOptions,
 ) ([]SeriesObservation, error) {
 	if groupName == "" {
-		return nil, fmt.Errorf("group name is required")
+		return nil, errors.New("group name is required")
 	}
-	endpointURL := fmt.Sprintf("%s/observations/group/%s/json", baseURL, groupName)
-	var opts *ObservationOptions
-	if len(options) > 0 {
-		opts = options[0]
+
+	resp, err := fetchObservations(groupName, true, options...)
+	if err != nil {
+		return nil, err
 	}
-	return fetchObservations(endpointURL, opts)
+
+	return parseObservations(resp.Observations), nil
 }
 
-func fetchObservations(endpointURL string, opts *ObservationOptions) ([]SeriesObservation, error) {
-	u, err := url.Parse(endpointURL)
+// fetchObservations is an internal function that fetches data from the API.
+func fetchObservations(
+	name string,
+	isGroup bool,
+	options ...*ObservationOptions,
+) (APIResponse, error) {
+	var endpointURL string
+	if isGroup {
+		endpointURL = baseURL + "/observations/group/" + name + "/json"
+	} else {
+		endpointURL = baseURL + "/observations/" + name + "/json"
+	}
+
+	parsedURL, err := url.Parse(endpointURL)
 	if err != nil {
-		return nil, fmt.Errorf("parsing URL: %w", err)
+		return APIResponse{}, fmt.Errorf("parsing URL: %w", err)
 	}
 
-	query := u.Query()
-	if opts == nil || !(opts.Recent != 0 || opts.StartDate != "" || opts.EndDate != "" ||
-		opts.RecentWeeks != 0 || opts.RecentMonths != 0 || opts.RecentYears != 0) {
-		opts = &ObservationOptions{Recent: 1}
+	query := parsedURL.Query()
+
+	var opts *ObservationOptions
+	if len(options) > 0 && options[0] != nil {
+		opts = options[0]
+	} else {
+		opts = &ObservationOptions{
+			Recent:       1,
+			StartDate:    "",
+			EndDate:      "",
+			RecentWeeks:  0,
+			RecentMonths: 0,
+			RecentYears:  0,
+			OrderDir:     "",
+		}
 	}
 
-	if (opts.StartDate != "" && opts.EndDate == "") ||
-		(opts.EndDate != "" && opts.StartDate == "") {
-		return nil, fmt.Errorf("both StartDate and EndDate must be provided")
+	err = applyOptions(opts, query)
+	if err != nil {
+		return APIResponse{}, err
 	}
 
-	if opts.StartDate != "" {
+	parsedURL.RawQuery = query.Encode()
+
+	return API(parsedURL.String())
+}
+
+func applyOptions(opts *ObservationOptions, query url.Values) error {
+	if opts.StartDate != "" || opts.EndDate != "" {
+		if opts.StartDate == "" || opts.EndDate == "" {
+			return errors.New("both StartDate and EndDate must be provided")
+		}
+
 		startDate, err := time.Parse("2006-01-02", opts.StartDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid StartDate: %w", err)
+			return fmt.Errorf("invalid StartDate: %w", err)
 		}
+
 		endDate, err := time.Parse("2006-01-02", opts.EndDate)
 		if err != nil {
-			return nil, fmt.Errorf("invalid EndDate: %w", err)
+			return fmt.Errorf("invalid EndDate: %w", err)
 		}
+
 		if endDate.Before(startDate) {
-			return nil, fmt.Errorf("EndDate must be after StartDate")
+			return errors.New("EndDate must be after StartDate")
 		}
+
 		query.Set("start_date", opts.StartDate)
 		query.Set("end_date", opts.EndDate)
 	} else {
-		count := 0
-		for key, value := range map[string]int{
-			"recent":        opts.Recent,
-			"recent_weeks":  opts.RecentWeeks,
-			"recent_months": opts.RecentMonths,
-			"recent_years":  opts.RecentYears,
-		} {
+		setIfPositive := func(key string, value int) {
 			if value > 0 {
-				query.Set(key, fmt.Sprintf("%d", value))
-				count++
+				query.Set(key, strconv.Itoa(value))
 			}
 		}
-		if count > 1 {
-			return nil, fmt.Errorf("only one time range option can be provided")
-		}
+		setIfPositive("recent", opts.Recent)
+		setIfPositive("recent_weeks", opts.RecentWeeks)
+		setIfPositive("recent_months", opts.RecentMonths)
+		setIfPositive("recent_years", opts.RecentYears)
 	}
 
 	if opts.OrderDir == "asc" || opts.OrderDir == "desc" {
 		query.Set("order_dir", opts.OrderDir)
 	}
-	u.RawQuery = query.Encode()
 
-	resp, err := API(u.String())
-	if err != nil {
-		return nil, fmt.Errorf("fetching observations: %w", err)
-	}
+	return nil
+}
 
+func parseObservations(observations []Observation) []SeriesObservation {
 	var result []SeriesObservation
-	for _, obs := range resp.Observations {
+
+	for _, obs := range observations {
 		for name, seriesObs := range obs.Series {
 			result = append(result, SeriesObservation{
 				Date:    obs.Date,
@@ -168,5 +203,6 @@ func fetchObservations(endpointURL string, opts *ObservationOptions) ([]SeriesOb
 			})
 		}
 	}
-	return result, nil
+
+	return result
 }
