@@ -1,3 +1,3 @@
 module github.com/KubeFinancial/bankofcanada
 
-go 1.22.8
+go 1.22
